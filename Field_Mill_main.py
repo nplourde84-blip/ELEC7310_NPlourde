@@ -87,6 +87,16 @@ class FieldMill:
                 color="tab:gray", label=ground.name))
             
 # 3. Define field disribution in the domain space
+class FieldDistribution:
+    def __init__(self, domain, field_mill):
+        self.domain = domain
+        self.field_mill = field_mill
+        self.field = np.zeros_like(domain.X)  # Initialize field to zero
+
+    def calculate_field(self):
+        # Placeholder for actual field calculation using Gauss' law or other methods
+        # For now, we will just set the field to a constant value for demonstration
+        self.field.fill(100.0)  # V/m — example constant field
 # 4. Make Gauss' law calculations to determine the field at the field mill
 # 5. Calculate the field at the mill and show the plot
 
