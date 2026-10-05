@@ -88,16 +88,62 @@ class FieldMill:
             
 # 3. Define field disribution in the domain space
 class FieldDistribution:
-    def __init__(self, domain, field_mill):
+    def __init__(self, domain, field_mill, E0=100):
         self.domain = domain
         self.field_mill = field_mill
         self.field = np.zeros_like(domain.X)  # Initialize field to zero
+        self.E0 = E0  # V/m — example constant field
+        self.dx = domain.X[0,1] - domain.X[0,0]
+        self.dy = domain.Y[1,0] - domain.Y[0,0]
 
-    def calculate_field(self):
-        # Placeholder for actual field calculation using Gauss' law or other methods
-        # For now, we will just set the field to a constant value for demonstration
-        self.field.fill(100.0)  # V/m — example constant field
+        self.V = np.zeros_like(domain.X)  # V
+        self.Ex = np.zeros_like(domain.X)  # V/m
+        self.Ey = np.zeros_like(domain.X)  # V/m
+        self.E = np.zeros_like(domain.X)  # V/m — magnitude
 # 4. Make Gauss' law calculations to determine the field at the field mill
+    def solve(self, tol=1e-5, max_iter=100000):
+        X,Y = self.domain.X, self.domain.Y
+        dx2,dy2 = self.dx**2, self.dy**2
+
+        V = self.E0 * (Y - self.domain.ylim[0])
+
+        fixed = np.zeros_like(X, dtype=bool)
+        fixed[0,:] = True
+        fixed[-1,:] = True
+        for plate in self.field_mill.plates:
+            inside = plate.mask(X,Y)
+            V[inside] = plate.potential
+            fixed |= inside
+
+        #Update Equation
+        for i in range(max_iter):
+            Vp = np.pad(V, 1, mode="reflect")
+            Vp_left = Vp[1:-1, :-2]
+            Vp_right = Vp[1:-1, 2:]
+            Vp_up = Vp[:-2, 1:-1]
+            Vp_down = Vp[2:, 1:-1]
+            V_new = ((Vp_left + Vp_right) * dy2)/(2*(dx2 + dy2)) + ((Vp_up +Vp_down) * dx2)/(2*(dx2 + dy2))
+            V_new[fixed] = V[fixed]
+            change = np.max(np.abs(V_new - V))
+            V = V_new
+
+        self.V = V
+        self.iterations = i + 1
+        dVdy, dVdx = np.gradient(V, self.dy, self.dx)
+        self.Ex = -dVdx
+        self.Ey = -dVdy
+        self.E = np.hypot(self.Ex, self.Ey)
+        self.E[self.field_mill.mask(X,Y)] = 0
+    
+    def plot(self, ax):
+        xlim, ylim = self.domain.xlim, self.domain.ylim
+        extent = (xlim[0] - self.dx/2, xlim[1] + self.dx/2,
+                  ylim[0] - self.dy/2, ylim[1] + self.dy/2)
+        image = ax.imshow(self.E, origin="lower", extent=extent, cmap="viridis", vmin=0)
+        self.field_mill.plot(ax)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+        return image
 # 5. Calculate the field at the mill and show the plot
 
 if __name__ == "__main__":
@@ -106,6 +152,7 @@ if __name__ == "__main__":
     mill = FieldMill(center=(5.0, 5.0))
     # Create a figure and axis for plotting
     fig, ax = plt.subplots()
+    cbar = None
     
     # Move the ground plate one grid spacing at a time,
     # from fully covering the left sense plate to fully covering the right sense plate
@@ -115,10 +162,16 @@ if __name__ == "__main__":
 
     for offset in offsets:
         mill.set_shutter(offset / travel)
-
+        field = FieldDistribution(domain, mill, E0=100)
+        field.solve()
         # Plot the domain space
         ax.clear()
         mill.plot(ax)
+        image = field.plot(ax)
+        if cbar is None:
+            cbar = fig.colorbar(image, ax=ax, label="|E| (V/m)")
+        else:
+            cbar.update_normal(image)
         ax.set_xlim(domain.xlim)
         ax.set_ylim(domain.ylim)
         ax.set_title(f"Field Mill Environment — ground plate at x = {mill.ground_plate.x0:.2f} m")
