@@ -153,7 +153,7 @@ class FieldDistribution:
         xlim, ylim = self.domain.xlim, self.domain.ylim
         extent = (xlim[0] - self.dx/2, xlim[1] + self.dx/2,
                   ylim[0] - self.dy/2, ylim[1] + self.dy/2)
-        image = ax.imshow(self.E, origin="lower", extent=extent, cmap="viridis", vmin=0)
+        image = ax.imshow(self.E, origin="lower", extent=extent, cmap="viridis", vmin=0, vmax=600)
         self.field_mill.plot(ax)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
@@ -176,7 +176,10 @@ if __name__ == "__main__":
     travel = mill.side - mill.ground_plate.width    # m — total distance the ground plate moves
     offsets = np.append(np.arange(0, travel, step), travel)  # last step lands exactly on the right edge
 
-    for offset in offsets:
+    # Save the field map at the first, middle and last ground plate positions
+    snapshots = {0: "start", len(offsets) // 2: "middle", len(offsets) - 1: "end"}
+
+    for n, offset in enumerate(offsets):
         mill.set_shutter(offset / travel)
         field = FieldDistribution(domain, mill, E0=100)
         field.solve(V_init=V_prev)
@@ -197,6 +200,8 @@ if __name__ == "__main__":
         ax.set_xlabel("X-axis")
         ax.set_ylabel("Y-axis")
         ax.grid()
+        if n in snapshots:
+            fig.savefig(f"field_map_{snapshots[n]}.png", dpi=200, bbox_inches="tight")
         plt.pause(0.05)
 
     fig2, ax2 = plt.subplots()
