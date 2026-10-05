@@ -45,5 +45,5 @@ if __name__ == "__main__":
     ax2.set_xlabel("Offset (m)")
     ax2.legend()
     ax2.grid()
-
+    fig.savefig("analytical_soln.png", dpi=200, bbox_inches="tight")
     plt.show()

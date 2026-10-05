@@ -210,5 +210,6 @@ if __name__ == "__main__":
     ax2.set_xlabel("Ground Plate Offset (m)")
     ax2.set_ylabel("Plate Charge (nC)")
     ax2.legend()
+    fig2.savefig("plate_charge.png", dpi=200, bbox_inches="tight")
     # Show the plot
     plt.show()
