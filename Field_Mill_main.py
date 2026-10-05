@@ -101,11 +101,14 @@ class FieldDistribution:
         self.Ey = np.zeros_like(domain.X)  # V/m
         self.E = np.zeros_like(domain.X)  # V/m — magnitude
 # 4. Make Gauss' law calculations to determine the field at the field mill
-    def solve(self, tol=1e-5, max_iter=100000):
+    def solve(self, V_init, tol=1e-5, max_iter=100000):
         X,Y = self.domain.X, self.domain.Y
         dx2,dy2 = self.dx**2, self.dy**2
 
-        V = self.E0 * (Y - self.domain.ylim[0])
+        if V_init is None:
+            V = self.E0 * (Y - self.domain.ylim[0])
+        else:
+            V = V_init.copy()
 
         fixed = np.zeros_like(X, dtype=bool)
         fixed[0,:] = True
@@ -126,6 +129,8 @@ class FieldDistribution:
             V_new[fixed] = V[fixed]
             change = np.max(np.abs(V_new - V))
             V = V_new
+            if change < tol:
+                break
 
         self.V = V
         self.iterations = i + 1
@@ -134,6 +139,15 @@ class FieldDistribution:
         self.Ey = -dVdy
         self.E = np.hypot(self.Ex, self.Ey)
         self.E[self.field_mill.mask(X,Y)] = 0
+
+    def plate_charge(self, plate):
+        V = self.V
+        Vp = np.pad(V, 1, mode="reflect")
+        flux = ((2*V - Vp[1:-1, :-2] - Vp[1:-1, 2:]) * self.dy /self.dx +
+                (2*V - Vp[:-2, 1:-1] - Vp[2:, 1:-1]) * self.dx /self.dy)
+        inside = plate.mask(self.domain.X, self.domain.Y)
+        return EPS0 * flux[inside].sum() * self.field_mill.thick
+    
     
     def plot(self, ax):
         xlim, ylim = self.domain.xlim, self.domain.ylim
@@ -148,11 +162,13 @@ class FieldDistribution:
 
 if __name__ == "__main__":
     # Define the domain space
-    domain = Domain(xlim=(0, 10), ylim=(0, 10), dx=101, dy=101)
+    domain = Domain(xlim=(1.5, 8.5), ylim=(2.5, 8.5), dx=201, dy=201)
     mill = FieldMill(center=(5.0, 5.0))
     # Create a figure and axis for plotting
     fig, ax = plt.subplots()
     cbar = None
+    V_prev = None
+    charges = {plate.name: [] for plate in mill.sense_plates}
     
     # Move the ground plate one grid spacing at a time,
     # from fully covering the left sense plate to fully covering the right sense plate
@@ -163,7 +179,10 @@ if __name__ == "__main__":
     for offset in offsets:
         mill.set_shutter(offset / travel)
         field = FieldDistribution(domain, mill, E0=100)
-        field.solve()
+        field.solve(V_init=V_prev)
+        V_prev = field.V
+        for plate in mill.sense_plates:
+            charges[plate.name].append(field.plate_charge(plate))
         # Plot the domain space
         ax.clear()
         mill.plot(ax)
@@ -172,13 +191,19 @@ if __name__ == "__main__":
             cbar = fig.colorbar(image, ax=ax, label="|E| (V/m)")
         else:
             cbar.update_normal(image)
-        ax.set_xlim(domain.xlim)
-        ax.set_ylim(domain.ylim)
+        ax.set_xlim(2, 8)
+        ax.set_ylim(3, 8)
         ax.set_title(f"Field Mill Environment — ground plate at x = {mill.ground_plate.x0:.2f} m")
         ax.set_xlabel("X-axis")
         ax.set_ylabel("Y-axis")
         ax.grid()
         plt.pause(0.05)
 
+    fig2, ax2 = plt.subplots()
+    for name, q in charges.items():
+        ax2.plot(offsets, np.array(q)*1e9, label=name)
+    ax2.set_xlabel("Ground Plate Offset (m)")
+    ax2.set_ylabel("Plate Charge (nC)")
+    ax2.legend()
     # Show the plot
     plt.show()
