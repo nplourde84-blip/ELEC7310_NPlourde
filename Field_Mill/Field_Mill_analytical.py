@@ -3,7 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from Field_Mill_main import FieldMill, EPS0
+from Field_Mill.Field_Mill_main import FieldMill, EPS0
 
 E0 = 100     # V/m — uniform field normal to the plates
 R = 1e3      # 1 kOhm - Arbitrary feedback resistance
