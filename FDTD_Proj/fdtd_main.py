@@ -19,9 +19,9 @@ S = 1 # Courant number for stability
 dt = S * dx * np.sqrt(EPSR) / C # Time step in seconds
 
 t = 0 # Initialize time
-tmax = 0.8e-6 # Maximum simulation time in seconds (long enough for the slab echoes to die out)
-tau = 5e-9 # Pulse width in seconds
-t0 = 5*tau # Time delay for the pulse
+tmax = 1.0e-6 # Maximum simulation time in seconds (long enough for the slab echoes to reach the probe and die out)
+tau = 1/f0 # Pulse width in seconds (~1 carrier period, so several cycles fit under the envelope)
+t0 = 4*tau # Time delay for the pulse (pulse starts at ~1e-7 of its peak)
 def gaussian(t):
     return np.exp(-((t-t0)/tau)**2) * np.cos(2*np.pi*f0*(t-t0))  # Gaussian pulse centered at t=t0 with width tau
 N = int(xmax/dx) # Number of grid points
@@ -30,11 +30,17 @@ E = np.zeros((N, 3)) # Initialize electric field array, columns: [n-1, n, n+1]
 
 # Relative permittivity at each grid point
 eps = np.full(N, EPSR, dtype=float) # air everywhere (float so values like 2.5 are kept)
-eps[(x >= 35) & (x < 40)] = EPSRA # Region A: 35 m to 40 m
-eps[(x >= 40) & (x < 50)] = EPSRB # Region B: 40 m to 50 m
+x_slab = 40 - 2.85 # Front face of the dielectric stack in meters
+d_A = 2.65 # Thickness of each A layer in meters
+d_B = 4.33 # Thickness of the B layer in meters
+stack = [(EPSRA, d_A), (EPSRB, d_B), (EPSRA, d_A)] # A B A stack, front to back: (eps_r, thickness)
+x_layer = x_slab
+for epsr_layer, d_layer in stack:
+    eps[(x >= x_layer) & (x < x_layer + d_layer)] = epsr_layer
+    x_layer += d_layer
 x_src = 1.0 # Soft source location in meters
 i_src = int(round(x_src/dx))
-x_p = 20.0 # Probe location in meters (in air, in front of the slab)
+x_p = 20.0 # Probe location in meters (in air, must be in front of the slab)
 i_p = int(round(x_p/dx))
 probe = [] # E at the probe, every time step
 
@@ -68,17 +74,22 @@ snap_times = np.array(snap_times)
 # ---------------- Reflection coefficient Gamma(f) ----------------
 probe = np.array(probe)
 tt = (np.arange(len(probe)) + 1)*dt # Time of each probe sample
-# Incident and reflected pulses are well separated in time at the probe, so split the
-# signal at the moment the pulse peak reaches the slab front face (x = 35 m)
-t_split = t0 + (35 - x_src)/C
-inc = np.where(tt < t_split, probe, 0)
-refl = np.where(tt >= t_split, probe, 0)
+# The long pulse overlaps its own reflection at the probe, so the incident wave can't be
+# cut out in time. Instead use the fact that with S=1 in air the grid moves the wave
+# exactly one cell per step: the incident field at the probe is the source pulse
+# (half amplitude, the soft source sends half each way) delayed by the travel time.
+inc = 0.5*gaussian(tt - (i_p - i_src)*dt + 0.5*dt)
+refl = probe - inc # Reflected wave only
 
 nfft = 2**21 # Zero-pad for a fine frequency grid
 f = np.fft.rfftfreq(nfft, dt)
 k0 = 2*np.pi*f/C
+I_f = np.fft.rfft(inc, nfft)
+# Only trust frequencies where the pulse has real energy (about 3-37 MHz for tau = 1/f0)
+valid = np.abs(I_f) > 1e-3*np.abs(I_f).max()
 # Phase shift moves the reference from the probe to the slab front face
-Gamma = np.fft.rfft(refl, nfft)/np.fft.rfft(inc, nfft) * np.exp(2j*k0*(35 - x_p))
+Gamma = np.full(len(f), np.nan, dtype=complex)
+Gamma[valid] = np.fft.rfft(refl, nfft)[valid]/I_f[valid] * np.exp(2j*k0[valid]*(x_slab - x_p))
 i0 = np.argmin(np.abs(f - f0))
 print(f'Gamma at f0 = {f0/1e6:g} MHz: |Gamma| = {abs(Gamma[i0]):.4f}, '
       f'angle = {np.degrees(np.angle(Gamma[i0])):.2f} deg')
@@ -137,17 +148,17 @@ def update(k):
 anim = FuncAnimation(fig2, update, frames=len(snapshots), interval=30, blit=False)
 
 # Frequency response of the reflection coefficient
-band = f <= 100e6
+band = f <= 40e6
 fig3, (ax3a, ax3b) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
 ax3a.plot(f[band]/1e6, np.abs(Gamma[band]), color='C1', lw=1.5)
 ax3a.set_ylabel('|Γ|')
-ax3a.set_title('Reflection coefficient at slab front face (x = 35 m)', loc='left', fontsize=10)
+ax3a.set_title(f'Reflection coefficient at slab front face (x = {x_slab:g} m)', loc='left', fontsize=10)
 ax3b.plot(f[band]/1e6, np.degrees(np.angle(Gamma[band])), color='C1', lw=1.5)
 ax3b.set_ylabel('∠Γ (deg)')
 ax3b.set_ylim(-180, 180)
 ax3b.set_yticks([-180, -90, 0, 90, 180])
 ax3b.set_xlabel('f (MHz)')
-ax3b.set_xlim(0, 100)
+ax3b.set_xlim(0, 40)
 for ax in (ax3a, ax3b):
     ax.axvline(f0/1e6, color='0.35', lw=1, ls='--')
     ax.grid(alpha=0.3)
