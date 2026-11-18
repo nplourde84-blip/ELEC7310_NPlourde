@@ -9,14 +9,14 @@ MU0  = 4*np.pi*1e-7  # H/m — permeability of free space
 C    = 1/np.sqrt(MU0 * EPS0)  # m/s — speed of light
 f0 = 20*(10**6) # 20 MHz
 lambda0 = C/f0  # m — wavelength
-epsR = 1.0*EPS0 # Relative permittivity of the medium (air)
-epsRA = 2.0*EPS0 # Relative permittivity of the medium
-epsRB = 3.0*EPS0 # Relative permittivity of the medium
+EPSR = 1.0 # Relative permittivity of air (background)
+EPSRA = 2.0 # Relative permittivity of region A
+EPSRB = 3.0 # Relative permittivity of region B
 xmax = 100 # Maximum length of the domain in meters
 dx = 0.01 # Grid spacing in meters
 
 S = 1 # Courant number for stability
-dt = S * dx * np.sqrt(epsR) / C # Time step in seconds
+dt = S * dx * np.sqrt(EPSR) / C # Time step in seconds
 
 t = 0 # Initialize time
 tmax = 0.4e-6 # Maximum simulation time in seconds
@@ -29,11 +29,11 @@ x = np.arange(N)*dx # Position of each grid point in meters
 E = np.zeros((N, 3)) # Initialize electric field array, columns: [n-1, n, n+1]
 
 # Relative permittivity at each grid point
-eps = np.full(N, epsR) # air everywhere
-eps[(x >= 35) & (x < 40)] = epsRA # Region A: 35 m to 40 m
-eps[(x >= 40) & (x < 50)] = epsRB # Region B: 40 m to 50 m
+eps = np.full(N, EPSR, dtype=float) # air everywhere (float so values like 2.5 are kept)
+eps[(x >= 35) & (x < 40)] = EPSRA # Region A: 35 m to 40 m
+eps[(x >= 40) & (x < 50)] = EPSRB # Region B: 40 m to 50 m
 n = 0 # Initialize time step counter
-save_every = 200 # Save a snapshot of E every this many time steps
+save_every = 250 # Save a snapshot of E every this many time steps
 snapshots = [] # Saved E-field snapshots for plotting
 snap_times = [] # Time of each snapshot in seconds
 while t < tmax: # Run the simulation for the specified time
@@ -60,7 +60,7 @@ snap_times = np.array(snap_times)
 edges = np.flatnonzero(np.diff(eps)) + 1 # Indices where eps changes value
 starts = np.concatenate(([0], edges))
 ends = np.concatenate((edges, [N]))
-blocks = [(x[i0], x[i1-1] + dx, eps[i0]) for i0, i1 in zip(starts, ends) if eps[i0] != epsR]
+blocks = [(x[i0], x[i1-1] + dx, eps[i0]) for i0, i1 in zip(starts, ends) if eps[i0] != EPSR]
 
 ylim = 1.1*max(1.0, np.abs(snapshots).max())
 
@@ -79,7 +79,7 @@ def style_axes(ax):
     ax.grid(alpha=0.3)
 
 # Static figure: the wave packet at a few times
-n_panels = 4
+n_panels = 3
 idx = np.linspace(0, len(snapshots) - 1, n_panels + 2).astype(int)[1:-1]
 fig1, axs = plt.subplots(n_panels, 1, figsize=(10, 2.2*n_panels), sharex=True)
 for ax, i in zip(axs, idx):
