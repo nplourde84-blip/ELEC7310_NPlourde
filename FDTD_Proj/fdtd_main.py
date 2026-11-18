@@ -9,9 +9,9 @@ MU0  = 4*np.pi*1e-7  # H/m — permeability of free space
 C    = 1/np.sqrt(MU0 * EPS0)  # m/s — speed of light
 f0 = 20*(10**6) # 20 MHz
 lambda0 = C/f0  # m — wavelength
-epsR = 1.0 # Relative permittivity of the medium (air)
-epsRA = 2.0 # Relative permittivity of the medium
-epsRB = 3.0 # Relative permittivity of the medium
+epsR = 1.0*EPS0 # Relative permittivity of the medium (air)
+epsRA = 2.0*EPS0 # Relative permittivity of the medium
+epsRB = 3.0*EPS0 # Relative permittivity of the medium
 xmax = 100 # Maximum length of the domain in meters
 dx = 0.01 # Grid spacing in meters
 
