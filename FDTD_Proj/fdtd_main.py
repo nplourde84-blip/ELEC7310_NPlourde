@@ -118,8 +118,14 @@ def style_axes(ax):
     ax.grid(alpha=0.3)
 
 # Static figure: the wave packet at a few times
-n_panels = 3
-idx = np.linspace(0, len(snapshots) - 1, n_panels + 2).astype(int)[1:-1]
+# Pick snapshot times from where the pulse peak is (air travel time from the source):
+# approaching the stack, centered on the stack, and after reflected/transmitted have separated
+x_end = x_slab + sum(d for _, d in stack) # Back face of the stack
+def t_peak_at(xx):
+    return t0 + (xx - x_src)/C
+snap_targets = [t_peak_at(x_slab - 15), t_peak_at((x_slab + x_end)/2), t_peak_at(min(x_end + 30, xmax - 15))]
+idx = [np.argmin(np.abs(snap_times - ts)) for ts in snap_targets]
+n_panels = len(idx)
 fig1, axs = plt.subplots(n_panels, 1, figsize=(10, 2.2*n_panels), sharex=True)
 for ax, i in zip(axs, idx):
     draw_blocks(ax)
